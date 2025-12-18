@@ -22,28 +22,23 @@ import certificateRoutes from "./routes/certificateRoutes.js";
 
 const app = express();
 
-/* =====================================================
-   ✅ CORS (RAILWAY + APK + NETLIFY SAFE)
-===================================================== */
+/* ===================== CORS ===================== */
 app.use(
   cors({
-    origin: "*", // allow mobile APK + admin web
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-/* =====================================================
-   MIDDLEWARE
-===================================================== */
+/* ===================== MIDDLEWARE ===================== */
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/uploads", express.static("uploads"));
 app.use("/certificates", express.static("certificates"));
 
-/* =====================================================
-   ROUTES
-===================================================== */
+/* ===================== ROUTES ===================== */
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/modules", moduleRoutes);
@@ -57,21 +52,23 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/games", gameRoutes);
 app.use("/api/certificates", certificateRoutes);
 
-/* =====================================================
-   HEALTH CHECK (IMPORTANT FOR RAILWAY)
-===================================================== */
+/* ===================== HEALTH CHECK ===================== */
 app.get("/api/health", async (req, res) => {
   try {
     await db.query("SELECT 1");
     res.json({ status: "ok", db: "connected" });
   } catch (err) {
+    console.error("DB Error:", err);
     res.status(500).json({ status: "error", db: "disconnected" });
   }
 });
 
-/* =====================================================
-   404 HANDLER
-===================================================== */
+/* ===================== ROOT ===================== */
+app.get("/", (req, res) => {
+  res.send("EduVerso Backend running 🚀");
+});
+
+/* ===================== 404 ===================== */
 app.use((req, res) => {
   res.status(404).json({
     error: "Route not found",
@@ -79,12 +76,17 @@ app.use((req, res) => {
   });
 });
 
-/* =====================================================
-   START SERVER (RAILWAY REQUIRED)
-===================================================== */
+/* ===================== START SERVER ===================== */
+const PORT = process.env.PORT || 5001;
 
-const PORT = process.env.PORT;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`EduVerso Backend running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
+app.get("/", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "EduVerso Backend is running 🚀",
+  });
+});
+
+
