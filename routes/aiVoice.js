@@ -1,40 +1,39 @@
-// routes/aiVoice.js
 import express from "express";
 import multer from "multer";
 import OpenAI from "openai";
 
 const router = express.Router();
-const upload = multer(); // receives audio buffer
+const upload = multer();
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAI() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not set");
+  }
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
-// POST /api/ai/stt  <-- STT endpoint
 router.post("/stt", upload.single("audio"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No audio received" });
     }
 
-    // Whisper Speech-to-Text
+    const client = getOpenAI();
+
     const transcription = await client.audio.transcriptions.create({
       file: {
         buffer: req.file.buffer,
         filename: "recording.webm",
       },
-      model: "gpt-4o-realtime-preview", // OPENAI SPEECH-TO-TEXT MODEL
+      model: "whisper-1",
     });
 
-    res.json({
-      text: transcription.text || "",
-    });
+    res.json({ text: transcription.text || "" });
 
   } catch (err) {
-    console.error("Whisper STT Error:", err);
+    console.error("STT Error:", err.message);
     res.status(500).json({ text: "" });
   }
 });
 
 export default router;
-

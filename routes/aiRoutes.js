@@ -1,4 +1,3 @@
-// routes/aiRoutes.js
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -10,25 +9,33 @@ import path from "path";
 
 const router = express.Router();
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/* =====================================================
+   SAFE OPENAI CLIENT (PREVENTS RAILWAY CRASH)
+===================================================== */
+function getOpenAI() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not set");
+  }
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
 
-/* -------------------------------------
-   Multer (uploads to /uploads/)
--------------------------------------- */
+/* =====================================================
+   MULTER CONFIG (UPLOADS)
+===================================================== */
 const upload = multer({
   dest: "uploads/",
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
 });
 
 /* =====================================================
-                 AI CHAT ENDPOINT
-    Works for: Study / Explain / Exam / Quiz Mode
+   AI CHAT ENDPOINT
+   Modes: study | explain | exam | quiz
 ===================================================== */
 router.post("/chat", async (req, res) => {
   try {
-    const { message, system_prompt, mode, user_id } = req.body;
+    const { message, system_prompt, mode = "study" } = req.body;
 
     if (!message && mode !== "quiz") {
       return res.json({
@@ -36,52 +43,53 @@ router.post("/chat", async (req, res) => {
       });
     }
 
-    /* -------------------------------------
-       Dynamic AI Behavior by Mode
-    -------------------------------------- */
     const modePrompt = {
       study:
         "You are a friendly AI tutor who explains concepts simply with examples.",
       explain:
         "You are an advanced teacher. Break topics down step-by-step clearly.",
-      exam: "You are an exam tutor. Ask the student questions, grade strictly, and give minimal hints.",
-      quiz: "You are a quiz generator. Always output JSON only.",
+      exam:
+        "You are an exam tutor. Ask questions, evaluate answers, and give minimal hints.",
+      quiz:
+        "You are a quiz generator. Output STRICT JSON only. No explanations.",
     };
 
     const systemMessage =
       system_prompt || modePrompt[mode] || modePrompt.study;
 
-    /* -------------------------------------
-       QUIZ MODE (Strict JSON)
-    -------------------------------------- */
+    const client = getOpenAI();
+
+    /* ======================
+       QUIZ MODE (JSON ONLY)
+    ======================= */
     if (mode === "quiz") {
-      const qPrompt = `
-        Generate a short 3-question multiple choice quiz about:
-        "${message}"
+      const quizPrompt = `
+Generate a short 3-question multiple choice quiz about:
+"${message}"
 
-        STRICT JSON ONLY:
+STRICT JSON FORMAT ONLY:
 
-        {
-          "quiz": [
-            {
-              "q": "",
-              "choices": ["A","B","C","D"],
-              "answer": 0
-            }
-          ]
-        }
-      `;
+{
+  "quiz": [
+    {
+      "q": "",
+      "choices": ["A","B","C","D"],
+      "answer": 0
+    }
+  ]
+}
+`;
 
       const completion = await client.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: modePrompt.quiz },
-          { role: "user", content: qPrompt },
+          { role: "user", content: quizPrompt },
         ],
         temperature: 0.3,
       });
 
-      let raw = completion.choices?.[0]?.message?.content || "";
+      const raw = completion.choices?.[0]?.message?.content || "";
 
       try {
         const jsonStart = raw.indexOf("{");
@@ -89,21 +97,21 @@ router.post("/chat", async (req, res) => {
         const parsed = JSON.parse(clean);
 
         return res.json({
-          reply: "Quiz generated!",
+          reply: "Quiz generated successfully",
           quiz: parsed.quiz,
         });
       } catch (e) {
         return res.json({
-          reply: "Unable to generate quiz in proper format.",
-          raw,
+          reply: "Quiz format error",
           quiz: null,
+          raw,
         });
       }
     }
 
-    /* -------------------------------------
-       NORMAL CHAT (study/explain/exam)
-    -------------------------------------- */
+    /* ======================
+       NORMAL CHAT
+    ======================= */
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -119,22 +127,25 @@ router.post("/chat", async (req, res) => {
       "I'm not sure how to answer that.";
 
     return res.json({ reply });
+
   } catch (err) {
-    console.log("AI Chat Error:", err);
+    console.error("AI Chat Error:", err.message);
     return res.json({
-      reply: "AI is having issues right now. Please try again soon.",
+      reply: "AI service is currently unavailable.",
     });
   }
 });
 
 /* =====================================================
-                     SPEECH → TEXT (Whisper)
+   SPEECH → TEXT (WHISPER)
 ===================================================== */
 router.post("/stt", upload.single("audio"), async (req, res) => {
   try {
-    if (!req.file)
+    if (!req.file) {
       return res.status(400).json({ error: "No audio file uploaded" });
+    }
 
+    const client = getOpenAI();
     const audioPath = path.resolve(req.file.path);
 
     const transcription = await client.audio.transcriptions.create({
@@ -142,13 +153,13 @@ router.post("/stt", upload.single("audio"), async (req, res) => {
       model: "whisper-1",
     });
 
-    fs.unlink(audioPath, () => {}); // Cleanup temp file
+    fs.unlink(audioPath, () => {}); // cleanup temp file
 
     return res.json({
-      text: transcription.text || transcription.data?.text || "",
+      text: transcription.text || "",
     });
   } catch (err) {
-    console.log("STT Error:", err);
+    console.error("STT Error:", err.message);
     return res.status(500).json({
       text: "",
       error: "Transcription failed",
@@ -157,25 +168,26 @@ router.post("/stt", upload.single("audio"), async (req, res) => {
 });
 
 /* =====================================================
-                   IMAGE → AI EXPLANATION
+   IMAGE → AI EXPLANATION
 ===================================================== */
 router.post("/image", upload.single("image"), async (req, res) => {
   try {
-    if (!req.file)
+    if (!req.file) {
       return res.status(400).json({ error: "No image uploaded" });
+    }
 
-    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
-      req.file.filename
-    }`;
+    const client = getOpenAI();
+
+    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
     const prompt = `
-      Analyze this image like a teacher:
-      ${imageUrl}
+Analyze this image like a teacher:
+${imageUrl}
 
-      - What is shown?
-      - What can a student learn from this?
-      - Explain clearly and simply.
-    `;
+- What is shown?
+- What can a student learn?
+- Explain clearly and simply.
+`;
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
@@ -183,7 +195,7 @@ router.post("/image", upload.single("image"), async (req, res) => {
         {
           role: "system",
           content:
-            "You are an educational assistant. Describe images clearly and relate them to learning.",
+            "You are an educational assistant. Describe images clearly for students.",
         },
         { role: "user", content: prompt },
       ],
@@ -193,14 +205,14 @@ router.post("/image", upload.single("image"), async (req, res) => {
 
     const reply =
       completion.choices?.[0]?.message?.content ||
-      "I couldn't analyze the image.";
+      "Unable to analyze the image.";
 
     return res.json({
       url: imageUrl,
       reply,
     });
   } catch (err) {
-    console.log("Image AI Error:", err);
+    console.error("Image AI Error:", err.message);
     return res.status(500).json({
       error: "Image analysis failed",
     });
