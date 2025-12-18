@@ -40,7 +40,8 @@ app.use("/uploads", express.static("uploads"));
 app.use("/certificates", express.static("certificates"));
 
 /* ===================== ROUTES ===================== */
-app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes);
+
 app.use("/api/admin", adminRoutes);
 app.use("/api/modules", moduleRoutes);
 app.use("/api/students", studentRoutes);
