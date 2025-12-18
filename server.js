@@ -79,14 +79,15 @@ app.use((req, res) => {
 /* ===================== START SERVER ===================== */
 const PORT = process.env.PORT || 5001;
 
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
-});
 app.get("/", (req, res) => {
   res.json({
     status: "OK",
     message: "EduVerso Backend is running 🚀",
   });
+});
+
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
 
 
