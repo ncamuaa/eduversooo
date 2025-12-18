@@ -1,4 +1,3 @@
-// server.js
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -28,7 +27,6 @@ app.use(
     origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
   })
 );
 
@@ -40,8 +38,7 @@ app.use("/uploads", express.static("uploads"));
 app.use("/certificates", express.static("certificates"));
 
 /* ===================== ROUTES ===================== */
-app.use("/auth", authRoutes);
-
+app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/modules", moduleRoutes);
 app.use("/api/students", studentRoutes);
@@ -81,15 +78,6 @@ app.use((req, res) => {
 /* ===================== START SERVER ===================== */
 const PORT = process.env.PORT || 5001;
 
-app.get("/", (req, res) => {
-  res.json({
-    status: "OK",
-    message: "EduVerso Backend is running 🚀",
-  });
-});
-
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log("🚀 Server running on port", PORT);
 });
-
-
